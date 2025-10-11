@@ -10,6 +10,8 @@ import org.jfree.chart.plot.PlotOrientation;
 import org.jfree.data.statistics.HistogramDataset;
 import org.jfree.data.xy.XYSeries;
 import org.jfree.data.xy.XYSeriesCollection;
+import org.jfree.data.category.DefaultCategoryDataset;
+import org.jfree.chart.renderer.category.BarRenderer;
 
 import javax.swing.*;
 import java.awt.*;
@@ -25,13 +27,18 @@ public class MutationRateAnalysis {
     private static final double OPTIMAL_FITNESS = 10.0;
     private static final int THRESHOLD_FITNESS = 9; // To consider as converging
 
-    private static final int TOURNAMENT_SELECTION_SIZE = 5;
-    private static final double CROSSOVER_PROBABILITY = 0.2;
+    private static final int TOURNAMENT_SELECTION_SIZE = 2;
+    private static final double CROSSOVER_PROBABILITY = 0.1;
     private static final int INITIAL_MUTATION_END = 20;
     private static final int ENDING_MUTATION_START = 90;
-    private static final double INITIAL_MUTATION_PROB = 0.8; // 30% mutation
-    private static final double ENDING_MUTATION_PROB = 0.8; // 1% mutation
-    private static final double DEFAULT_MUTATION_PROB = 0.1; // 10% mutation
+    private static final double INITIAL_MUTATION_PROB = 0.4;
+    private static final double ENDING_MUTATION_PROB = 0.4;
+    private static final double DEFAULT_MUTATION_PROB = 0.1;
+
+    private static final Paint BASE_COLOR = Color.BLACK;
+    private static final Paint INITIAL_MUTATION_COLOR = Color.BLUE;
+    private static final Paint ENDING_MUTATION_COLOR = Color.RED;
+    private static final Stroke THICK_STROKE = new BasicStroke(4.0f);
 
 
     /**
@@ -122,7 +129,7 @@ public class MutationRateAnalysis {
         }
     }
 
-    // High mutation at
+    // High mutation at start
     static class HighMutationStartStrategy implements MutationStrategy {
         @Override
         public double getMutationProbability(int generation) {
@@ -138,11 +145,11 @@ public class MutationRateAnalysis {
         }
     }
 
-    // High mutation at end (iterations 90-100)
+    // High mutation at end
     static class HighMutationEndStrategy implements MutationStrategy {
         @Override
         public double getMutationProbability(int generation) {
-            if (generation >= ENDING_MUTATION_START) {
+            if (generation > ENDING_MUTATION_START) {
                 return ENDING_MUTATION_PROB;
             }
             return DEFAULT_MUTATION_PROB;
@@ -211,7 +218,7 @@ public class MutationRateAnalysis {
     private static SimulationResult runSimulation(MutationStrategy strategy) {
         /*
          * NOTE:
-         * - simuluationResult is the one we created above to store results
+         * - simulationResult is the one we created above to store results
          * - finalResult is from jenetics library to store the final result of the evolution
          */
         SimulationResult simulationResult = new SimulationResult();
@@ -244,6 +251,7 @@ public class MutationRateAnalysis {
                     if (simulationResult.generationsToOptimal == -1 && er.bestFitness() == OPTIMAL_FITNESS) {
                         simulationResult.generationsToOptimal = (int) er.generation();
                     }
+//                    System.out.println("Generation " + er.generation());
                 })
                 .collect(EvolutionResult.toBestEvolutionResult());
 
@@ -267,18 +275,50 @@ public class MutationRateAnalysis {
         return simulationResult;
     }
 
-    // Create fitness distribution histogram
-    private static JPanel createHistogram(Map<String, SimulationResult> results) {
-        HistogramDataset dataset = new HistogramDataset();
+//    // Create fitness distribution histogram
+//    private static JPanel createHistogram(Map<String, SimulationResult> results) {
+//        HistogramDataset dataset = new HistogramDataset();
+//
+//        for (Map.Entry<String, SimulationResult> entry : results.entrySet()) {
+//            double[] values = entry.getValue().finalPopulationFitness.stream()
+//                    .mapToDouble(Integer::doubleValue)
+//                    .toArray();
+//            dataset.addSeries(entry.getKey(), values, 11, -0.5, 10.5);
+//        }
+//
+//        JFreeChart chart = ChartFactory.createHistogram(
+//                "Final Population Fitness Distribution",
+//                "Fitness Value",
+//                "Frequency",
+//                dataset,
+//                PlotOrientation.VERTICAL,
+//                true,
+//                true,
+//                false
+//        );
+//
+//        return new ChartPanel(chart);
+//    }
 
+    private static JPanel createHistogram(Map<String, SimulationResult> results) {
+        // Use CategoryDataset instead of HistogramDataset
+        org.jfree.data.category.DefaultCategoryDataset dataset =
+                new org.jfree.data.category.DefaultCategoryDataset();
+
+        // Count frequencies for each fitness value (0-10) for each strategy
         for (Map.Entry<String, SimulationResult> entry : results.entrySet()) {
-            double[] values = entry.getValue().finalPopulationFitness.stream()
-                    .mapToDouble(Integer::doubleValue)
-                    .toArray();
-            dataset.addSeries(entry.getKey(), values, 11, -0.5, 10.5);
+            String strategyName = entry.getKey();
+            Map<Integer, Long> frequencyMap = entry.getValue().finalPopulationFitness.stream()
+                    .collect(Collectors.groupingBy(f -> f, Collectors.counting()));
+
+            // Add all fitness values 0-10
+            for (int fitness = 0; fitness <= 10; fitness++) {
+                long count = frequencyMap.getOrDefault(fitness, 0L);
+                dataset.addValue(count, strategyName, String.valueOf(fitness));
+            }
         }
 
-        JFreeChart chart = ChartFactory.createHistogram(
+        JFreeChart chart = ChartFactory.createBarChart(
                 "Final Population Fitness Distribution",
                 "Fitness Value",
                 "Frequency",
@@ -288,6 +328,13 @@ public class MutationRateAnalysis {
                 true,
                 false
         );
+
+        // Optional: Set colors for the bars
+        org.jfree.chart.renderer.category.BarRenderer renderer =
+                (org.jfree.chart.renderer.category.BarRenderer) chart.getCategoryPlot().getRenderer();
+        renderer.setSeriesPaint(0, Color.RED);
+        renderer.setSeriesPaint(1, Color.BLUE);
+        renderer.setSeriesPaint(2, Color.ORANGE);
 
         return new ChartPanel(chart);
     }
@@ -315,6 +362,16 @@ public class MutationRateAnalysis {
                 true,
                 false
         );
+
+        // Color change for better visibility
+        chart.getXYPlot().getRenderer().setSeriesPaint(0, BASE_COLOR);
+        chart.getXYPlot().getRenderer().setSeriesPaint(1, INITIAL_MUTATION_COLOR);
+        chart.getXYPlot().getRenderer().setSeriesPaint(2, ENDING_MUTATION_COLOR); // Changed from green
+
+        // Set line width (2.0f is default, try 3.0f or 4.0f for thicker lines)
+        chart.getXYPlot().getRenderer().setSeriesStroke(0, THICK_STROKE);
+        chart.getXYPlot().getRenderer().setSeriesStroke(1, THICK_STROKE);
+        chart.getXYPlot().getRenderer().setSeriesStroke(2, THICK_STROKE);
 
         return new ChartPanel(chart);
     }

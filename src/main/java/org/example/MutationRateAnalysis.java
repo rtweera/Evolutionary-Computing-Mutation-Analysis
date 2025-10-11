@@ -7,11 +7,8 @@ import org.jfree.chart.ChartFactory;
 import org.jfree.chart.ChartPanel;
 import org.jfree.chart.JFreeChart;
 import org.jfree.chart.plot.PlotOrientation;
-import org.jfree.data.statistics.HistogramDataset;
 import org.jfree.data.xy.XYSeries;
 import org.jfree.data.xy.XYSeriesCollection;
-import org.jfree.data.category.DefaultCategoryDataset;
-import org.jfree.chart.renderer.category.BarRenderer;
 
 import javax.swing.*;
 import java.awt.*;
@@ -236,6 +233,9 @@ public class MutationRateAnalysis {
         // Track when optimal is first reached
         simulationResult.generationsToOptimal = -1;
 
+        // Store reference to the actual final evolution result
+        final EvolutionResult<BitGene, Integer>[] lastResult = new EvolutionResult[1];
+
         // Evolution statistics
         EvolutionResult<BitGene, Integer> finalResult = engine.stream()
                 .limit(MAX_GENERATIONS)
@@ -251,16 +251,17 @@ public class MutationRateAnalysis {
                     if (simulationResult.generationsToOptimal == -1 && er.bestFitness() == OPTIMAL_FITNESS) {
                         simulationResult.generationsToOptimal = (int) er.generation();
                     }
-//                    System.out.println("Generation " + er.generation());
+                    // Store the last result (generation 100)
+                    lastResult[0] = er;
                 })
                 .collect(EvolutionResult.toBestEvolutionResult());
 
-        // Collect final population fitness
-        simulationResult.finalPopulationFitness = finalResult.population().stream()
+        // Collect final population fitness from the ACTUAL last generation
+        simulationResult.finalPopulationFitness = lastResult[0].population().stream()
                 .map(Phenotype::fitness)
                 .collect(Collectors.toList());
 
-        simulationResult.finalBestFitness = finalResult.bestFitness();
+        simulationResult.finalBestFitness = lastResult[0].bestFitness();
         simulationResult.finalAvgFitness = simulationResult.finalPopulationFitness.stream()
                 .mapToInt(Integer::intValue)
                 .average()
@@ -275,31 +276,7 @@ public class MutationRateAnalysis {
         return simulationResult;
     }
 
-//    // Create fitness distribution histogram
-//    private static JPanel createHistogram(Map<String, SimulationResult> results) {
-//        HistogramDataset dataset = new HistogramDataset();
-//
-//        for (Map.Entry<String, SimulationResult> entry : results.entrySet()) {
-//            double[] values = entry.getValue().finalPopulationFitness.stream()
-//                    .mapToDouble(Integer::doubleValue)
-//                    .toArray();
-//            dataset.addSeries(entry.getKey(), values, 11, -0.5, 10.5);
-//        }
-//
-//        JFreeChart chart = ChartFactory.createHistogram(
-//                "Final Population Fitness Distribution",
-//                "Fitness Value",
-//                "Frequency",
-//                dataset,
-//                PlotOrientation.VERTICAL,
-//                true,
-//                true,
-//                false
-//        );
-//
-//        return new ChartPanel(chart);
-//    }
-
+    // Create histogram chart
     private static JPanel createHistogram(Map<String, SimulationResult> results) {
         // Use CategoryDataset instead of HistogramDataset
         org.jfree.data.category.DefaultCategoryDataset dataset =
@@ -447,8 +424,8 @@ public class MutationRateAnalysis {
                 sb.append("Final Best: ").append(result.finalBestFitness).append("\n");
                 sb.append("Final Avg: ").append(String.format("%.2f", result.finalAvgFitness)).append("\n");
                 sb.append("Convergence: ").append(String.format("%.2f%%", result.convergenceRate * 100)).append("\n");
-                sb.append("Gen to Optimal: ").append(result.generationsToOptimal == -1 ? "Never" : result.generationsToOptimal).append("\n");
-                sb.append("Solutions at 10: ").append(result.finalPopulationFitness.stream().filter(f -> f == 10).count()).append("\n");
+                sb.append("Generations to Optimal: ").append(result.generationsToOptimal == -1 ? "Never" : result.generationsToOptimal).append("\n");
+                sb.append("Solutions at Optimal: ").append(result.finalPopulationFitness.stream().filter(f -> f == 10).count()).append("\n");
                 sb.append("---\n");
             }
             metricsText.setText(sb.toString());

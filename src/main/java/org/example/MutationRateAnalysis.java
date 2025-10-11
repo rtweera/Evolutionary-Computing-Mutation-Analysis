@@ -34,7 +34,6 @@ public class MutationRateAnalysis {
     // Custom alterer that changes mutation probability based on generation
     private static class AdaptiveMutator extends Mutator<BitGene, Integer> {
         private final MutationStrategy strategy;
-        private int currentGeneration = 0;
 
         public AdaptiveMutator(MutationStrategy strategy) {
             super(0.01); // Default low mutation
@@ -43,7 +42,7 @@ public class MutationRateAnalysis {
 
         @Override
         public AltererResult<BitGene, Integer> alter(Seq<Phenotype<BitGene, Integer>> population, long generation) {
-            currentGeneration = (int) generation;
+            int currentGeneration = (int) generation;
             double mutationProb = strategy.getMutationProbability(currentGeneration);
 
             // Create a new mutator with the appropriate probability

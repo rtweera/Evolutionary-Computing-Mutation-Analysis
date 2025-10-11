@@ -23,23 +23,58 @@ public class MutationRateAnalysis {
     private static final int POPULATION_SIZE = 1000;
     private static final int MAX_GENERATIONS = 100;
     private static final double OPTIMAL_FITNESS = 10.0;
+    private static final int THRESHOLD_FITNESS = 9; // To consider as converging
 
-    // Fitness function: count the number of ones
+    private static final int TOURNAMENT_SELECTION_SIZE = 5;
+    private static final double CROSSOVER_PROBABILITY = 0.2;
+    private static final int INITIAL_MUTATION_END = 20;
+    private static final int ENDING_MUTATION_START = 90;
+    private static final double INITIAL_MUTATION_PROB = 0.8; // 30% mutation
+    private static final double ENDING_MUTATION_PROB = 0.8; // 1% mutation
+    private static final double DEFAULT_MUTATION_PROB = 0.1; // 10% mutation
+
+
+    /**
+     * Calculates the fitness of a given genotype by counting the number of '1' bits
+     * in its chromosome. This fitness function is used to evaluate how well a genotype
+     * performs in the genetic algorithm.
+     *
+     * @param gt the genotype to evaluate, which contains a chromosome of `BitGene` objects
+     * @return the fitness value, represented as the count of '1' bits in the chromosome
+     */
     private static int fitness(Genotype<BitGene> gt) {
         return (int) gt.chromosome().stream()
                 .filter(BitGene::bit)
                 .count();
     }
 
-    // Custom alterer that changes mutation probability based on generation
+    /**
+     * A custom mutator that dynamically adjusts the mutation probability
+     * based on the current generation of the genetic algorithm. This allows
+     * for adaptive mutation rates during the evolution process.
+     */
     private static class AdaptiveMutator extends Mutator<BitGene, Integer> {
         private final MutationStrategy strategy;
 
+        /**
+         * Constructs an AdaptiveMutator with a given mutation strategy.
+         *
+         * @param strategy the mutation strategy that determines the mutation
+         *                 probability for each generation
+         */
         public AdaptiveMutator(MutationStrategy strategy) {
             super(0.01); // Default low mutation
             this.strategy = strategy;
         }
 
+        /**
+         * Alters the population by applying mutation with a dynamically
+         * determined probability based on the current generation.
+         *
+         * @param population the population of phenotypes to be altered
+         * @param generation the current generation number
+         * @return the result of the alteration, including the altered population
+         */
         @Override
         public AltererResult<BitGene, Integer> alter(Seq<Phenotype<BitGene, Integer>> population, long generation) {
             int currentGeneration = (int) generation;
@@ -51,9 +86,26 @@ public class MutationRateAnalysis {
         }
     }
 
-    // Strategy interface for different mutation approaches
+    /**
+     * Interface representing a mutation strategy for a genetic algorithm.
+     * Provides methods to determine the mutation probability for a given generation
+     * and to retrieve the name of the strategy.
+     */
     interface MutationStrategy {
+
+        /**
+         * Calculates the mutation probability for a specific generation.
+         *
+         * @param generation the current generation number
+         * @return the mutation probability as a double value
+         */
         double getMutationProbability(int generation);
+
+        /**
+         * Retrieves the name of the mutation strategy.
+         *
+         * @return the name of the strategy as a String
+         */
         String getName();
     }
 
@@ -61,28 +113,28 @@ public class MutationRateAnalysis {
     static class BaselineStrategy implements MutationStrategy {
         @Override
         public double getMutationProbability(int generation) {
-            return 0.01; // 1% mutation probability
+            return DEFAULT_MUTATION_PROB;
         }
 
         @Override
         public String getName() {
-            return "Baseline (Constant 1%)";
+            return String.format("Baseline (Constant %.0f%%)", DEFAULT_MUTATION_PROB * 100);
         }
     }
 
-    // High mutation at start (iterations 1-20)
+    // High mutation at
     static class HighMutationStartStrategy implements MutationStrategy {
         @Override
         public double getMutationProbability(int generation) {
-            if (generation <= 20) {
-                return 0.3; // 30% mutation probability at start
+            if (generation <= INITIAL_MUTATION_END) {
+                return INITIAL_MUTATION_PROB;
             }
-            return 0.01; // 1% for the rest
+            return DEFAULT_MUTATION_PROB;
         }
 
         @Override
         public String getName() {
-            return "High Mutation Start (30% gen 1-20)";
+            return String.format("High Mutation Start (%.0f%% gen 1-%d)", INITIAL_MUTATION_PROB * 100, INITIAL_MUTATION_END);
         }
     }
 
@@ -90,27 +142,47 @@ public class MutationRateAnalysis {
     static class HighMutationEndStrategy implements MutationStrategy {
         @Override
         public double getMutationProbability(int generation) {
-            if (generation >= 90) {
-                return 0.3; // 30% mutation probability at end
+            if (generation >= ENDING_MUTATION_START) {
+                return ENDING_MUTATION_PROB;
             }
-            return 0.01; // 1% for the rest
+            return DEFAULT_MUTATION_PROB;
         }
 
         @Override
         public String getName() {
-            return "High Mutation End (30% gen 90-100)";
+            return String.format("High Mutation End (%.0f%% gen %d-%d)", ENDING_MUTATION_PROB * 100, ENDING_MUTATION_START, MAX_GENERATIONS);
         }
     }
 
-    // Results container
+    /**
+     * Container class for storing the results of a genetic algorithm simulation.
+     * This class holds various metrics and data collected during the simulation,
+     * such as fitness values, convergence rates, and the number of generations
+     * required to reach the optimal solution.
+     */
     static class SimulationResult {
+        /** The name of the mutation strategy used in the simulation. */
         String strategyName;
+
+        /** A list of the best fitness values recorded for each generation. */
         List<Double> bestFitnessPerGen = new ArrayList<>();
+
+        /** A list of the average fitness values recorded for each generation. */
         List<Double> avgFitnessPerGen = new ArrayList<>();
+
+        /** A list of the fitness values of the final population. */
         List<Integer> finalPopulationFitness = new ArrayList<>();
+
+        /** The best fitness value achieved in the final generation. */
         double finalBestFitness;
+
+        /** The average fitness value of the final population. */
         double finalAvgFitness;
+
+        /** The convergence rate, representing the proportion of solutions near optimal. */
         double convergenceRate;
+
+        /** The number of generations required to reach the optimal solution. */
         int generationsToOptimal;
 
         public void printMetrics() {
@@ -122,64 +194,77 @@ public class MutationRateAnalysis {
                     (generationsToOptimal == -1 ? "Never reached" : generationsToOptimal));
             System.out.println("Solutions at Optimal (10): " +
                     finalPopulationFitness.stream().filter(f -> f == 10).count());
-            System.out.println("Solutions >= 8: " +
+            System.out.println("Solutions >= " + THRESHOLD_FITNESS + ": " +
                     finalPopulationFitness.stream().filter(f -> f >= 8).count());
         }
     }
 
-    // Run simulation with a specific strategy
+    /**
+     * Runs a genetic algorithm simulation using the specified mutation strategy.
+     * This method initializes the genetic algorithm engine, tracks the evolution
+     * process, and collects various metrics about the simulation results.
+     *
+     * @param strategy the mutation strategy to be used in the simulation
+     * @return a `SimulationResult` object containing the metrics and data
+     *         collected during the simulation
+     */
     private static SimulationResult runSimulation(MutationStrategy strategy) {
-        SimulationResult result = new SimulationResult();
-        result.strategyName = strategy.getName();
+        /*
+         * NOTE:
+         * - simuluationResult is the one we created above to store results
+         * - finalResult is from jenetics library to store the final result of the evolution
+         */
+        SimulationResult simulationResult = new SimulationResult();
+        simulationResult.strategyName = strategy.getName();
 
         // Create the genetic algorithm engine
         Engine<BitGene, Integer> engine = Engine
                 .builder(MutationRateAnalysis::fitness, BitChromosome.of(CHROMOSOME_LENGTH))
                 .populationSize(POPULATION_SIZE)
-                .alterers(new AdaptiveMutator(strategy), new SinglePointCrossover<>(0.2))
-                .selector(new TournamentSelector<>(5))
+                .alterers(new AdaptiveMutator(strategy), new SinglePointCrossover<>(CROSSOVER_PROBABILITY))
+                .selector(new TournamentSelector<>(TOURNAMENT_SELECTION_SIZE))
                 .maximizing()
                 .build();
 
         // Track when optimal is first reached
-        result.generationsToOptimal = -1;
+        simulationResult.generationsToOptimal = -1;
 
         // Evolution statistics
         EvolutionResult<BitGene, Integer> finalResult = engine.stream()
                 .limit(MAX_GENERATIONS)
                 .peek(er -> {
                     // Track best and average fitness
-                    result.bestFitnessPerGen.add((double) er.bestFitness());
-                    result.avgFitnessPerGen.add(er.population().stream()
+                    simulationResult.bestFitnessPerGen.add((double) er.bestFitness());
+                    simulationResult.avgFitnessPerGen.add(er.population().stream()
                             .mapToInt(Phenotype::fitness)
                             .average()
                             .orElse(0.0));
 
                     // Check if optimal reached
-                    if (result.generationsToOptimal == -1 && er.bestFitness() == OPTIMAL_FITNESS) {
-                        result.generationsToOptimal = (int) er.generation();
+                    if (simulationResult.generationsToOptimal == -1 && er.bestFitness() == OPTIMAL_FITNESS) {
+                        simulationResult.generationsToOptimal = (int) er.generation();
                     }
                 })
                 .collect(EvolutionResult.toBestEvolutionResult());
 
         // Collect final population fitness
-        result.finalPopulationFitness = finalResult.population().stream()
+        simulationResult.finalPopulationFitness = finalResult.population().stream()
                 .map(Phenotype::fitness)
                 .collect(Collectors.toList());
 
-        result.finalBestFitness = finalResult.bestFitness();
-        result.finalAvgFitness = result.finalPopulationFitness.stream()
+        simulationResult.finalBestFitness = finalResult.bestFitness();
+        simulationResult.finalAvgFitness = simulationResult.finalPopulationFitness.stream()
                 .mapToInt(Integer::intValue)
                 .average()
                 .orElse(0.0);
 
         // Calculate convergence rate (how many solutions are near optimal)
-        long nearOptimal = result.finalPopulationFitness.stream()
-                .filter(f -> f >= 8)
+        long nearOptimal = simulationResult.finalPopulationFitness.stream()
+                .filter(fitnessValue -> fitnessValue >= THRESHOLD_FITNESS)
                 .count();
-        result.convergenceRate = (double) nearOptimal / POPULATION_SIZE;
+        simulationResult.convergenceRate = (double) nearOptimal / POPULATION_SIZE;
 
-        return result;
+        return simulationResult;
     }
 
     // Create fitness distribution histogram

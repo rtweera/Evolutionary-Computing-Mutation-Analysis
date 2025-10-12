@@ -25,7 +25,7 @@ public class MutationRateAnalysis {
     private static final int THRESHOLD_FITNESS = 9; // To consider as converging
 
     private static final int TOURNAMENT_SELECTION_SIZE = 2;
-    private static final double CROSSOVER_PROBABILITY = 0.1;
+    private static final double CROSSOVER_PROBABILITY = 0.01;
     private static final int INITIAL_MUTATION_END = 20;
     private static final int ENDING_MUTATION_START = 90;
     private static final double INITIAL_MUTATION_PROB = 0.4;
@@ -122,7 +122,7 @@ public class MutationRateAnalysis {
 
         @Override
         public String getName() {
-            return String.format("Baseline (Constant %.0f%%)", DEFAULT_MUTATION_PROB * 100);
+            return String.format("Baseline (Constant %.0f%%) mutation probability", DEFAULT_MUTATION_PROB * 100);
         }
     }
 
@@ -138,7 +138,7 @@ public class MutationRateAnalysis {
 
         @Override
         public String getName() {
-            return String.format("High Mutation Start (%.0f%% gen 1-%d)", INITIAL_MUTATION_PROB * 100, INITIAL_MUTATION_END);
+            return String.format("High Mutation Start (%.0f%% mutation probability for gen 1-%d)", INITIAL_MUTATION_PROB * 100, INITIAL_MUTATION_END);
         }
     }
 
@@ -154,7 +154,7 @@ public class MutationRateAnalysis {
 
         @Override
         public String getName() {
-            return String.format("High Mutation End (%.0f%% gen %d-%d)", ENDING_MUTATION_PROB * 100, ENDING_MUTATION_START, MAX_GENERATIONS);
+            return String.format("High Mutation End (%.0f%% mutation probability for gen %d-%d)", ENDING_MUTATION_PROB * 100, ENDING_MUTATION_START, MAX_GENERATIONS);
         }
     }
 
@@ -188,6 +188,9 @@ public class MutationRateAnalysis {
 
         /** The number of generations required to reach the optimal solution. */
         int generationsToOptimal;
+
+        /** A list of fitness values for all individuals in each generation. */
+        List<List<Integer>> fitnessPerGenAllIndividuals = new ArrayList<>();
 
         public void printMetrics() {
             System.out.println("\n=== " + strategyName + " ===");
@@ -246,6 +249,12 @@ public class MutationRateAnalysis {
                             .mapToInt(Phenotype::fitness)
                             .average()
                             .orElse(0.0));
+
+                    // Store all fitness values for variation calculation
+                    List<Integer> allFitness = er.population().stream()
+                            .map(Phenotype::fitness)
+                            .collect(Collectors.toList());
+                    simulationResult.fitnessPerGenAllIndividuals.add(allFitness);
 
                     // Check if optimal reached
                     if (simulationResult.generationsToOptimal == -1 && er.bestFitness() == OPTIMAL_FITNESS) {
@@ -306,12 +315,11 @@ public class MutationRateAnalysis {
                 false
         );
 
-        // Optional: Set colors for the bars
         org.jfree.chart.renderer.category.BarRenderer renderer =
                 (org.jfree.chart.renderer.category.BarRenderer) chart.getCategoryPlot().getRenderer();
-        renderer.setSeriesPaint(0, Color.RED);
-        renderer.setSeriesPaint(1, Color.BLUE);
-        renderer.setSeriesPaint(2, Color.ORANGE);
+        renderer.setSeriesPaint(0, BASE_COLOR);
+        renderer.setSeriesPaint(1, INITIAL_MUTATION_COLOR);
+        renderer.setSeriesPaint(2, ENDING_MUTATION_COLOR);
 
         return new ChartPanel(chart);
     }
@@ -333,6 +341,52 @@ public class MutationRateAnalysis {
                 "Average Fitness Over Generations",
                 "Generation",
                 "Average Fitness",
+                dataset,
+                PlotOrientation.VERTICAL,
+                true,
+                true,
+                false
+        );
+
+        // Color change for better visibility
+        chart.getXYPlot().getRenderer().setSeriesPaint(0, BASE_COLOR);
+        chart.getXYPlot().getRenderer().setSeriesPaint(1, INITIAL_MUTATION_COLOR);
+        chart.getXYPlot().getRenderer().setSeriesPaint(2, ENDING_MUTATION_COLOR); // Changed from green
+
+        // Set line width (2.0f is default, try 3.0f or 4.0f for thicker lines)
+        chart.getXYPlot().getRenderer().setSeriesStroke(0, THICK_STROKE);
+        chart.getXYPlot().getRenderer().setSeriesStroke(1, THICK_STROKE);
+        chart.getXYPlot().getRenderer().setSeriesStroke(2, THICK_STROKE);
+
+        return new ChartPanel(chart);
+    }
+
+    // Create fitness variation (standard deviation) evolution chart
+    private static JPanel createFitnessVariationChart(Map<String, SimulationResult> results) {
+        XYSeriesCollection dataset = new XYSeriesCollection();
+
+        for (Map.Entry<String, SimulationResult> entry : results.entrySet()) {
+            XYSeries series = new XYSeries(entry.getKey());
+            SimulationResult result = entry.getValue();
+
+            // Calculate standard deviation for each generation
+            for (int i = 0; i < result.fitnessPerGenAllIndividuals.size(); i++) {
+                List<Integer> genFitness = result.fitnessPerGenAllIndividuals.get(i);
+                double mean = genFitness.stream().mapToInt(Integer::intValue).average().orElse(0.0);
+                double variance = genFitness.stream()
+                        .mapToDouble(f -> Math.pow(f - mean, 2))
+                        .average()
+                        .orElse(0.0);
+                double stdDev = Math.sqrt(variance);
+                series.add(i, stdDev);
+            }
+            dataset.addSeries(series);
+        }
+
+        JFreeChart chart = ChartFactory.createXYLineChart(
+                "Fitness Variation (Std Dev) Over Generations",
+                "Generation",
+                "Standard Deviation",
                 dataset,
                 PlotOrientation.VERTICAL,
                 true,
@@ -407,11 +461,12 @@ public class MutationRateAnalysis {
         SwingUtilities.invokeLater(() -> {
             JFrame frame = new JFrame("Genetic Algorithm Mutation Analysis");
             frame.setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
-            frame.setLayout(new GridLayout(2, 2));
+            frame.setLayout(new GridLayout(2, 2, 20, 20));
 
             frame.add(createHistogram(results));
             frame.add(createFitnessEvolutionChart(results));
-            frame.add(createBestFitnessChart(results));
+//            frame.add(createBestFitnessChart(results));
+            frame.add(createFitnessVariationChart(results));
 
             // Add metrics panel
             JPanel metricsPanel = new JPanel();
@@ -420,7 +475,7 @@ public class MutationRateAnalysis {
             metricsText.setEditable(false);
             StringBuilder sb = new StringBuilder();
             for (SimulationResult result : results.values()) {
-                sb.append("\n").append(result.strategyName).append("\n");
+                sb.append("\n**").append(result.strategyName).append("**\n");
                 sb.append("Final Best: ").append(result.finalBestFitness).append("\n");
                 sb.append("Final Avg: ").append(String.format("%.2f", result.finalAvgFitness)).append("\n");
                 sb.append("Convergence: ").append(String.format("%.2f%%", result.convergenceRate * 100)).append("\n");
@@ -428,6 +483,7 @@ public class MutationRateAnalysis {
                 sb.append("Solutions at Optimal: ").append(result.finalPopulationFitness.stream().filter(f -> f == 10).count()).append("\n");
                 sb.append("---\n");
             }
+            sb.append("\nNOTE: Convergence is percent of individuals in the final population with fitness >= ").append(THRESHOLD_FITNESS).append("\n");
             metricsText.setText(sb.toString());
             metricsPanel.add(new JScrollPane(metricsText));
             frame.add(metricsPanel);

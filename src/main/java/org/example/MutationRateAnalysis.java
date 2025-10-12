@@ -25,17 +25,18 @@ public class MutationRateAnalysis {
     private static final int THRESHOLD_FITNESS = 9; // To consider as converging
 
     private static final int TOURNAMENT_SELECTION_SIZE = 2;
-    private static final double CROSSOVER_PROBABILITY = 0.01;
+    private static final double CROSSOVER_PROBABILITY = 0.5;
     private static final int INITIAL_MUTATION_END = 20;
     private static final int ENDING_MUTATION_START = 90;
-    private static final double INITIAL_MUTATION_PROB = 0.4;
-    private static final double ENDING_MUTATION_PROB = 0.4;
-    private static final double DEFAULT_MUTATION_PROB = 0.1;
+    private static final double INITIAL_MUTATION_PROB = 0.3;
+    private static final double ENDING_MUTATION_PROB = 0.3;
+    private static final double DEFAULT_MUTATION_PROB = 0.01;
 
     private static final Paint BASE_COLOR = Color.BLACK;
     private static final Paint INITIAL_MUTATION_COLOR = Color.BLUE;
     private static final Paint ENDING_MUTATION_COLOR = Color.RED;
     private static final Stroke THICK_STROKE = new BasicStroke(4.0f);
+    private static final Stroke THIN_STROKE = new BasicStroke(2.0f);
 
 
     /**
@@ -354,7 +355,7 @@ public class MutationRateAnalysis {
         chart.getXYPlot().getRenderer().setSeriesPaint(2, ENDING_MUTATION_COLOR); // Changed from green
 
         // Set line width (2.0f is default, try 3.0f or 4.0f for thicker lines)
-        chart.getXYPlot().getRenderer().setSeriesStroke(0, THICK_STROKE);
+        chart.getXYPlot().getRenderer().setSeriesStroke(0, THIN_STROKE);
         chart.getXYPlot().getRenderer().setSeriesStroke(1, THICK_STROKE);
         chart.getXYPlot().getRenderer().setSeriesStroke(2, THICK_STROKE);
 
@@ -400,7 +401,7 @@ public class MutationRateAnalysis {
         chart.getXYPlot().getRenderer().setSeriesPaint(2, ENDING_MUTATION_COLOR); // Changed from green
 
         // Set line width (2.0f is default, try 3.0f or 4.0f for thicker lines)
-        chart.getXYPlot().getRenderer().setSeriesStroke(0, THICK_STROKE);
+        chart.getXYPlot().getRenderer().setSeriesStroke(0, THIN_STROKE);
         chart.getXYPlot().getRenderer().setSeriesStroke(1, THICK_STROKE);
         chart.getXYPlot().getRenderer().setSeriesStroke(2, THICK_STROKE);
 
